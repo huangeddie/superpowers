@@ -39,9 +39,12 @@ This determines which menu to show and how cleanup works:
 
 | State | Menu | Cleanup |
 |-------|------|---------|
-| `GIT_DIR == GIT_COMMON` (normal repo) | Standard 3 options | No worktree to clean up |
-| `GIT_DIR != GIT_COMMON`, named branch | Standard 3 options | Provenance-based (see Step 6) |
-| `GIT_DIR != GIT_COMMON`, detached HEAD | Reduced 2 options (no merge) | Externally managed — leave in place |
+| `GIT_DIR == GIT_COMMON` (normal repo) | Standard 2 options | No worktree to clean up |
+| `GIT_DIR != GIT_COMMON`, named branch | Standard 2 options | Provenance-based (see Step 6) |
+| `GIT_DIR != GIT_COMMON`, detached HEAD | Reduced 2 options (merge by commit, no branch to delete) | Externally managed — leave in place |
+
+All integration is local-only: this skill never pushes to a remote or creates
+a pull request.
 
 ## Step 3: Determine Base Branch
 
@@ -52,14 +55,13 @@ Confirm before merging: merging into the wrong base is expensive to undo.
 
 ## Step 4: Present Options
 
-**Normal repo and named-branch worktree — present exactly these 3 options:**
+**Normal repo and named-branch worktree — present exactly these 2 options:**
 
 ```
 Implementation complete. What would you like to do?
 
 1. Merge back to <base-branch> locally
-2. Push and create a Pull Request
-3. Keep the branch as-is (I'll handle it later)
+2. Keep the branch as-is (I'll handle it later)
 
 Which option?
 ```
@@ -69,7 +71,7 @@ Which option?
 ```
 Implementation complete. You're on a detached HEAD (externally managed workspace).
 
-1. Push as new branch and create a Pull Request
+1. Merge into <base-branch> locally
 2. Keep as-is (I'll handle it later)
 
 Which option?
@@ -88,44 +90,38 @@ is theirs.
 ```bash
 # Get main repo root for CWD safety
 MAIN_ROOT=$(git -C "$(git rev-parse --git-common-dir)/.." rev-parse --show-toplevel)
+
+# Detached HEAD: capture the commit before leaving the worktree — there is
+# no branch name to merge by later.
+DETACHED_SHA=$(git rev-parse HEAD)  # only needed in the detached-HEAD case
+
 cd "$MAIN_ROOT"
 
 # Merge first — verify success before removing anything
 git checkout <base-branch>
 git pull
-git merge <feature-branch>
+git merge <feature-branch>     # named-branch case
+git merge "$DETACHED_SHA"      # detached-HEAD case
 
 # Verify tests on merged result
 <test command>
 ```
 
-If tests fail on the merged result: stop, leave the worktree and branch in
-place, and investigate — nothing has been pushed, so the merge is local
-and recoverable.
+If tests fail on the merged result: stop, leave the worktree (and branch,
+if any) in place, and investigate — nothing has been pushed, so the merge
+is local and recoverable.
 
-Once the merged result is green: clean up the worktree (Step 6), then
-delete the branch:
+Once the merged result is green: clean up the worktree (Step 6). Named-
+branch case only — delete the now-merged branch:
 
 ```bash
 git branch -d <feature-branch>
 ```
 
-### Option 2: Push and Create PR
+Detached HEAD created no branch, so there is nothing to delete — cleanup
+is just the worktree.
 
-```bash
-git push -u origin <feature-branch>
-# From a detached HEAD, name the new branch on the remote:
-# git push origin HEAD:refs/heads/<new-branch>
-```
-
-Then create the pull/merge request against <base-branch> with the forge's
-tooling — its CLI if one is available, or the creation URL most forges
-print when you push — following the repo's PR template and conventions if
-present, and report the URL to your human partner.
-
-Keep the worktree — your human partner iterates on PR feedback there.
-
-### Option 3: Keep As-Is
+### Option 2: Keep As-Is
 
 Report: "Keeping branch <name>. Worktree preserved at <path>."
 
@@ -158,8 +154,8 @@ git branch -D <feature-branch>
 
 ## Step 6: Cleanup Workspace
 
-**Runs for Option 1 and confirmed discards.** Options 2 and 3 always
-preserve the worktree. Both callers have already changed directory to the
+**Runs for Option 1 and confirmed discards.** Option 2 always
+preserves the worktree. Both callers have already changed directory to the
 main repo root — worktree removal must run from outside the worktree —
 and use the `GIT_DIR`/`GIT_COMMON`/`WORKTREE_PATH` values captured in
 Step 2, from before that directory change.
@@ -202,12 +198,11 @@ place. If your platform provides a workspace-exit tool, use it.
 
 ## Quick Reference
 
-| Option | Merge | Push | Keep Worktree | Cleanup Branch |
-|--------|-------|------|---------------|----------------|
-| 1. Merge locally | yes | - | - | yes |
-| 2. Create PR | - | yes | yes | - |
-| 3. Keep as-is | - | - | yes | - |
-| Discard (explicit request only) | - | - | - | yes (force) |
+| Option | Merge | Keep Worktree | Cleanup Branch |
+|--------|-------|---------------|-----------------|
+| 1. Merge locally | yes | - | yes (named-branch case; detached HEAD has no branch to delete) |
+| 2. Keep as-is | - | yes | - |
+| Discard (explicit request only) | - | - | yes (force) |
 
 ## Common Rationalizations
 
@@ -217,9 +212,8 @@ place. If your platform provides a workspace-exit tool, use it.
 | "They obviously want it merged" | Integration is your human partner's decision. Present the menu and wait. |
 | "They seem done with this feature — I'll offer to discard it" | The menu is complete as written. Discard happens only when your human partner asks for it in so many words. |
 | "'Yeah, get rid of it' counts as confirmation" | Only the typed word `discard` authorizes deletion. |
-| "The PR is up, so the worktree is clutter now" | PR feedback gets fixed in that worktree. It stays until the work lands. |
 | "This other worktree looks stale — I'll clean it too" | Clean up only worktrees under `.worktrees/` or `worktrees/`. Everything else belongs to the host. |
 | "Removal refused — `--force` is just finishing the cleanup" | The refusal means files exist only in that worktree. `--force` destroys them permanently. Show your human partner and ask. |
 | "The merged-result failure is probably flaky" | A failing merged result stops everything. Branch and worktree stay put while you investigate. |
 | "The base branch is obviously main" | Confirm the fork point or ask. Merging into the wrong base is expensive to undo. |
-| "The push was rejected — force-push will fix it" | A rejected push means the remote moved. Investigate; force-push only on your human partner's explicit request. |
+| "I'll just push it myself, they'll probably want that eventually" | This skill is local-only. Never push or open a PR, even when asked to "finish" or "wrap up" the branch — offer only merge locally or keep as-is. |

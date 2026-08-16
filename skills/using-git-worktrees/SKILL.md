@@ -1,13 +1,23 @@
 ---
 name: using-git-worktrees
-description: Use when starting feature work that needs isolation from current workspace or before executing implementation plans - ensures an isolated workspace exists via native tools or git worktree fallback
+description: Use only after an explicit request for a new isolated workspace - ensures an isolated workspace exists via native tools or git worktree fallback
 ---
 
 # Using Git Worktrees
 
 ## Overview
 
-Ensure work happens in an isolated workspace. Prefer your platform's native worktree tools. Fall back to manual git worktrees only when no native tool is available.
+The checkout, branch, and worktree a session starts in is the workspace your
+human partner selected. Never invoke this skill on your own initiative
+before implementation, and never ask whether to create or switch to a new
+one — invoke it only after your human partner explicitly asks for a new
+isolated workspace. That request is itself the consent; it does not
+authorize later switching, merging, deleting, or otherwise leaving the
+workspace it created.
+
+Once invoked, ensure work happens in an isolated workspace. Prefer your
+platform's native worktree tools. Fall back to manual git worktrees only
+when no native tool is available.
 
 **Core principle:** Detect existing isolation first. Then use native tools. Then fall back to git. Never fight the harness.
 
@@ -36,13 +46,7 @@ Report with branch state:
 - On a branch: "Already in isolated workspace at `<path>` on branch `<name>`."
 - Detached HEAD: "Already in isolated workspace at `<path>` (detached HEAD, externally managed). Branch creation needed at finish time."
 
-**If `GIT_DIR == GIT_COMMON` (or in a submodule):** You are in a normal repo checkout.
-
-Has the user already indicated their worktree preference in your instructions? If not, ask for consent before creating a worktree:
-
-> "Would you like me to set up an isolated worktree? It protects your current branch from changes."
-
-Honor any existing declared preference without asking. If the user declines consent, work in place and skip to Step 2.
+**If `GIT_DIR == GIT_COMMON` (or in a submodule):** You are in a normal repo checkout. This skill is only invoked after your human partner has explicitly asked for a new isolated workspace — that request is the consent. Do not ask again; proceed to Step 1.
 
 ## Step 1: Create Isolated Workspace
 
@@ -160,6 +164,7 @@ Ready to implement <feature-name>
 
 | Excuse | Reality |
 |--------|---------|
+| "This implementation task would be safer isolated — I'll set up a worktree first" | Never invoke this skill on your own initiative. The starting workspace was your human partner's choice; invoke only on an explicit request for a new isolated workspace. |
 | "I'm obviously not in a worktree — no need to check" | Run Step 0. Harness-created isolation and submodules both fool eyeballing; the detection commands settle it. |
 | "`git worktree add` is quicker than hunting for a native tool" | A native tool (e.g. `EnterWorktree`) owns placement, branching, and cleanup. Bypassing it is the #1 mistake — it creates phantom state your harness can't see or manage. |
 | "The worktree directory is surely ignored already" | Run `git check-ignore`. An unignored worktree directory commits the whole tree into the repo. |

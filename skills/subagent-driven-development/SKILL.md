@@ -123,10 +123,10 @@ digraph process {
 
 ## Setup
 
-Ensure the work happens in an isolated workspace: use
-superpowers:using-git-worktrees to create one or verify the existing one.
-Never start implementation on a main/master branch without your human
-partner's explicit consent.
+Work in the workspace the session started in. Do not invoke
+superpowers:using-git-worktrees or otherwise create or switch to a
+different branch/worktree on your own initiative — only on an explicit
+request from your human partner for a new isolated workspace.
 
 Conversation memory does not survive compaction. In real sessions,
 controllers that lost their place have re-dispatched entire completed task
